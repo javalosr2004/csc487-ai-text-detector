@@ -10,7 +10,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from sklearn.model_selection import train_test_split
 
 from models import make_model
-from tokenizer import CharTokenizer
+from tokenizer import make_tokenizer
 from train import EssayDataset, create_mask, set_seed
 
 
@@ -60,7 +60,7 @@ def evaluate(checkpoint_path):
 
     set_seed(cfg["training"]["seed"])
 
-    tokenizer = CharTokenizer()
+    tokenizer = make_tokenizer(cfg)
     tokenizer.load(cfg["paths"]["vocab"])
 
     model = make_model(

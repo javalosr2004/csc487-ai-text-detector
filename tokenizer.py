@@ -1,6 +1,8 @@
 import json
 import os
 
+from transformers import BertTokenizer
+
 
 class CharTokenizer:
     def __init__(self):
@@ -56,4 +58,45 @@ class CharTokenizer:
             with open(path, "r") as f:
                 self.char_to_idx = json.load(f)
             self.idx_to_char = {int(i): c for c, i in self.char_to_idx.items()}
+
+
+class BertTokenizerWrapper:
+    def __init__(self, model_name="bert-base-uncased"):
+        self.tokenizer = BertTokenizer.from_pretrained(model_name)
+
+    def build_vocab(self, texts):
+        pass
+
+    def encode(self, text, max_len=512):
+        encoded = self.tokenizer.encode(
+            text,
+            max_length=max_len,
+            padding="max_length",
+            truncation=True
+        )
+        return encoded
+
+    def decode(self, token_ids):
+        return self.tokenizer.decode(token_ids, skip_special_tokens=True)
+
+    @property
+    def vocab_size(self):
+        return self.tokenizer.vocab_size
+
+    @property
+    def pad_token_id(self):
+        return self.tokenizer.pad_token_id
+
+    def save(self, path):
+        pass
+
+    def load(self, path):
+        pass
+
+
+def make_tokenizer(cfg):
+    tokenizer_type = cfg.get("training", {}).get("tokenizer", "char")
+    if tokenizer_type == "bert":
+        return BertTokenizerWrapper()
+    return CharTokenizer()
 

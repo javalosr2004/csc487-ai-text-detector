@@ -12,7 +12,8 @@ from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 
 from models import make_model
-from tokenizer import CharTokenizer
+from tokenizer import CharTokenizer, make_tokenizer
+from preprocessing import preprocess_text, filter_short_texts
 
 
 class EssayDataset(Dataset):
@@ -86,7 +87,19 @@ def train(config_path):
     texts = df["text"].tolist()
     labels = df["generated"].tolist()
 
-    tokenizer = CharTokenizer()
+    # Preprocess texts
+    print(f"Preprocessing {len(texts)} texts...")
+    texts = [preprocess_text(text) for text in texts]
+
+    # Filter out very short texts
+    original_count = len(texts)
+    texts, labels = filter_short_texts(texts, labels, min_length=100)
+    filtered_count = original_count - len(texts)
+    if filtered_count > 0:
+        print(f"Filtered out {filtered_count} texts shorter than 100 characters")
+    print(f"Final dataset size: {len(texts)} texts")
+
+    tokenizer = make_tokenizer(cfg)
     tokenizer.build_vocab(texts)
     tokenizer.save(cfg["paths"]["vocab"])
 
