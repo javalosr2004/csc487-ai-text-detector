@@ -7,6 +7,7 @@ import torch.nn as nn
 import pandas as pd
 import matplotlib.pyplot as plt
 import yaml
+import time
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 
@@ -73,6 +74,7 @@ def plot_curves(history, save_path):
 
 
 def train(config_path):
+    print("Training")
     cfg = load_config(config_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -113,11 +115,13 @@ def train(config_path):
 
     history = {"train_loss": [], "val_loss": [], "val_acc": []}
 
+    print("Beginning")
     for epoch in range(cfg["training"]["epochs"]):
+        epoch_start = time.time()
         model.train()
         total_loss = 0
 
-        for batch in train_loader:
+        for batch_idx, batch in enumerate(train_loader):
             input_ids = batch["input_ids"].to(device)
             batch_labels = batch["label"].to(device)
             mask = create_mask(input_ids, tokenizer.pad_token_id).to(device)
@@ -129,6 +133,9 @@ def train(config_path):
             optimizer.step()
 
             total_loss += loss.item()
+
+            if (batch_idx + 1) % 10 == 0:
+                print(f"  Batch {batch_idx + 1}/{len(train_loader)} | Loss: {loss.item():.4f}")
 
         avg_loss = total_loss / len(train_loader)
 
@@ -158,10 +165,12 @@ def train(config_path):
         history["val_loss"].append(avg_val_loss)
         history["val_acc"].append(val_acc)
 
+        epoch_time = time.time() - epoch_start
         print(f"Epoch {epoch + 1}/{cfg['training']['epochs']} | "
               f"Train Loss: {avg_loss:.4f} | "
               f"Val Loss: {avg_val_loss:.4f} | "
-              f"Val Acc: {val_acc:.4f}")
+              f"Val Acc: {val_acc:.4f} | "
+              f"Time: {epoch_time:.1f}s")
 
         checkpoint_path = os.path.join(cfg["paths"]["checkpoint_dir"], f"model_epoch_{epoch + 1}.pt")
         torch.save({

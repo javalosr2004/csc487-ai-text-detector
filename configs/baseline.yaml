@@ -16,7 +16,7 @@ training:
 
 # Paths
 paths:
-  data: "../data/Training_Essay_Data.csv"
+  data: "data/Training_Essay_Data.csv"
   checkpoint_dir: "checkpoints"
   vocab: "vocab.json"
 
