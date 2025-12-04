@@ -12,7 +12,7 @@ pip install -r requirements.txt
 
 ## Data Format
 
-The training data should be a CSV file named `essay_data.csv` with the following columns:
+The training data should be a CSV file named `Training_Essay_Data.csv` with the following columns:
 
 | Column | Description |
 |--------|-------------|
@@ -27,13 +27,19 @@ Train the baseline model:
 python train.py --config configs/baseline.yaml
 ```
 
+Train the improved model:
+
+```bash
+python train.py --config configs/bert.yaml
+```
+
 This will:
-- Load data from `essay_data.csv`
+- Load data from `Training_Essay_Data.csv`
 - Set random seed to 42 for reproducibility
 - Train for 10 epochs
 - Save checkpoints to `checkpoints/`
 - Generate training curves (`checkpoints/training_curves.png`)
-- Save final baseline checkpoint (`checkpoints/baseline.pt`)
+- Save final model checkpoint (`checkpoints/baseline.pt` or `checkpoints/bert.pt`)
 
 ## Evaluation
 
@@ -41,6 +47,26 @@ Evaluate the baseline model:
 
 ```bash
 python eval.py --checkpoint checkpoints/baseline.pt
+```
+
+Evaluate the improved model:
+
+```bash
+python eval.py --checkpoint checkpoints/bert.pt
+```
+
+## Inference
+
+Test the baseline model:
+
+```bash
+python inference.py --checkpoint checkpoints/baseline.pt
+```
+
+Test the improved model:
+
+```bash
+python inference.py --checkpoint checkpoints/bert.pt
 ```
 
 This will:
@@ -51,7 +77,7 @@ This will:
 
 ## Configuration
 
-Edit `configs/baseline.yaml` to adjust:
+Edit `configs/baseline.yaml` or `configs/bert.yaml` to adjust:
 
 **Model:**
 - `d_model`: Hidden dimension (default: 512)
@@ -76,9 +102,12 @@ csc487-ai-text-detector/
 │   └── transformer.py    # Model architecture
 ├── configs/
 │   └── baseline.yaml     # Hyperparameters
+│   └── bert.yaml         # Hyperparameters
+├── tokenizer.py          # Character-level tokenizer
+├── preprocessing.py      # Preprocessing script
 ├── train.py              # Training script
 ├── eval.py               # Evaluation script
-├── tokenizer.py          # Character-level tokenizer
+├── inference.py          # Inference script
 ├── requirements.txt      # Dependencies
 └── README.md
 ```
@@ -87,8 +116,18 @@ csc487-ai-text-detector/
 
 To reproduce reported metrics:
 
+For baseline model:
+
 ```bash
 pip install -r requirements.txt
 python train.py --config configs/baseline.yaml
 python eval.py --checkpoint checkpoints/baseline.pt
+```
+
+For improved model:
+
+```bash
+pip install -r requirements.txt
+python train.py --config configs/bert.yaml
+python eval.py --checkpoint checkpoints/bert.pt
 ```
