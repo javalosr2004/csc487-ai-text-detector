@@ -8,6 +8,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import yaml
 import time
+from pathlib import Path
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 
@@ -197,8 +198,9 @@ def train(config_path):
             "config": cfg
         }, checkpoint_path)
 
-    # Save final baseline checkpoint
-    baseline_path = os.path.join(cfg["paths"]["checkpoint_dir"], "baseline.pt")
+    # Save final checkpoint
+    model_name = Path(config_path).stem
+    model_path = os.path.join(cfg["paths"]["checkpoint_dir"], f"{model_name}.pt")
     torch.save({
         "epoch": cfg["training"]["epochs"],
         "model_state_dict": model.state_dict(),
@@ -208,13 +210,13 @@ def train(config_path):
         "val_acc": history["val_acc"][-1],
         "vocab_size": tokenizer.vocab_size,
         "config": cfg
-    }, baseline_path)
+    }, model_path)
 
     curves_path = os.path.join(cfg["paths"]["checkpoint_dir"], "training_curves.png")
     plot_curves(history, curves_path)
 
     print("Training complete.")
-    print(f"Baseline checkpoint saved to {baseline_path}")
+    print(f"Model saved to {model_path}")
 
 
 if __name__ == "__main__":
