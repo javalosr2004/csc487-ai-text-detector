@@ -11,37 +11,66 @@ Original file is located at
 
 import copy
 import math
-import os
-from os.path import exists
-import spacy
-import time
-import warnings
 
-import altair as alt
 import pandas as pd
+from sklearn.model_selection import train_test_split
 
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-from torch.nn.functional import log_softmax, pad
-from torch.optim.lr_scheduler import LambdaLR
-from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
-import torch.distributed as dist
-import torch.multiprocessing as mp
-from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data import Dataset, DataLoader
 
 """# 2. Data"""
 
-df = pd.read_csv("essay_data.csv")
+df = pd.read_csv("data/Training_Essay_Data.csv")
 df.head()
-df.loc[:, "text"].str.len().mean()
+
+X_full = df["text"]
+y_full = df["generated"]
+
+X_train, X_test, y_train, y_test = train_test_split(X_full, y_full, test_size=0.3, random_state=42)
+X_test, X_val, y_test, y_val = train_test_split(X_test, y_test, test_size=0.5, random_state=42)
+
+from transformers import BertTokenizer
+tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+
+class EssayDataset(Dataset):
+    def __init__(self, texts, labels, tokenizer, max_len=512):
+      self.texts = texts
+      self.labels = labels
+      self.tokenizer = tokenizer
+      self.max_len = max_len
+
+    def __len__(self):
+        return len(self.texts)
+
+    def __getitem__(self, index):
+      text = self.texts[index]
+      label = self.labels[index]
+
+      tokenize_output = self.tokenizer(
+          text,
+          padding="max_length",
+          truncation=True,
+          max_length=self.max_len,
+          return_tensors="pt"
+      )
+
+      return {
+          "input_ids": tokenize_output["input_ids"].squeeze(0),
+          "attention_mask": tokenize_output["attention_mask"].squeeze(0),
+          "label": torch.tensor(label, dtype=torch.long)
+      }
+
+train_dataset = EssayDataset(X_train, y_train, tokenizer)
+test_dataset = EssayDataset(X_test, y_test, tokenizer)
+val_dataset   = EssayDataset(X_val, y_val, tokenizer)
+
+train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=64, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=64, shuffle=True)
 
 """# 3. Helper Functions"""
-
-def show_example(fn, args=[]):
-    if __name__ == "__main__":
-        return fn(*args)
 
 def clones(module, N):
     "Produce N identical layers."
@@ -54,6 +83,10 @@ def subsequent_mask(size):
         torch.uint8
     )
     return subsequent_mask == 0
+
+def construct_mask(attention_mask):
+    mask = (attention_mask == 0)
+    return mask.unsqueeze(1).unsqueeze(2)
 
 def attention(query, key, value, mask=None, dropout=None):
     """Compute attention with query, key, and value vectors"""
@@ -69,7 +102,7 @@ def attention(query, key, value, mask=None, dropout=None):
 """# 4. AITextDetectionModel"""
 
 class AITextDetectionModel(nn.Module):
-    """Transform (only-encoder) architecture"""
+    """Transform (only-encoder) architecture with classifier head"""
     def __init__(self, source_embedding, encoder_stack, classifier_head):
         super(AITextDetectionModel, self).__init__()
         self.source_embedding = source_embedding
@@ -77,14 +110,16 @@ class AITextDetectionModel(nn.Module):
         self.classifier_head = classifier_head
 
     def forward(self, source, source_mask):
-        encoded_output = self.encoder_stack(self.source_embedding(source), source_mask)
-        output_embedding = encoded_output[:, 0, :]  # shape: (batch, hidden_dim)
-        logits = self.classifier_head(output_embedding)
+        embedded = self.source_embedding(source)
+        encoded_output = self.encoder_stack(embedded, source_mask)
+        cls_embedding = encoded_output[:, 0, :]
+        logits = self.classifier_head(cls_embedding)
         return logits
 
 """## Part 1: Embedding and Positional Encoding Layers"""
 
 class Embeddings(nn.Module):
+    "Embedding Layer: converts tokens into vectors"
     def __init__(self, d_model, vocab):
         super(Embeddings, self).__init__()
         self.embedding = nn.Embedding(vocab, d_model)
@@ -94,6 +129,7 @@ class Embeddings(nn.Module):
         return self.embedding(x) * math.sqrt(self.d_model)
 
 class PositionalEncoding(nn.Module):
+    "Postional Encoder: allows transformer to understand order of token embeddings"
     def __init__(self, d_model, dropout, max_len=5000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
@@ -122,7 +158,7 @@ class EncoderStack(nn.Module):
         self.norm = LayerNorm(encoding_layer.size)
 
     def forward(self, x, mask):
-        "Pass the input and mask through each encoder layer"
+        "Pass input and mask through each encoder layer"
         for layer in self.encoding_layers:
             x = layer(x, mask)
         return self.norm(x)
@@ -131,15 +167,18 @@ class EncoderLayer(nn.Module):
     def __init__(self, size, self_attention, feed_forward, dropout):
         "Encoder Layer consists of two sublayers: self-attention and feed forward layers"
         super(EncoderLayer, self).__init__()
+        self.size = size
         self.self_attention = self_attention
         self.feed_forward = feed_forward
         self.sublayer1 = ResidualConnection(size, dropout)
         self.sublayer2 = ResidualConnection(size, dropout)
 
     def forward(self, x, mask):
-        "Connect "
-        x = self.sublayer1 (x, lambda x: self.self_attention(x, x, x, mask))
-        return self.sublayer2(x, self.feed_forward)
+        "Connect attention and feed forward sublayers"
+        x = self.sublayer1(x, lambda x_: self.self_attention(x_, x_, x_, mask))
+        return self.sublayer2(x, lambda x_: self.feed_forward(x_))
+
+"""### Residual Connections and Layer Norm"""
 
 class ResidualConnection(nn.Module):
     """Residual connection with a layer norm"""
@@ -164,39 +203,36 @@ class LayerNorm(nn.Module):
         std = x.std(-1, keepdim=True)
         return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
 
-"""## Encoder Sublayer 1: Multi-Head Attention"""
+"""### Encoder Sublayer 1: Multi-Head Attention"""
 
 class MultiHeadedAttention(nn.Module):
     "Multi-headed attention block inside encoder layer"
     def __init__(self, h, d_model, dropout=0.1):
         super(MultiHeadedAttention, self).__init__()
         assert d_model % h == 0
-        # We assume d_v always equals d_k
         self.d_k = d_model // h
         self.h = h
-        self.linears = clones(nn.Linear(d_model, d_model), 4)
-        self.attn = None
-        self.dropout = nn.Dropout(p=dropout)
+        self.linear_layers = clones(nn.Linear(d_model, d_model), 4)
+        self.attention = None
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, query, key, value, mask=None):
-        "Implements Figure 2"
         if mask is not None:
-            # Same mask applied to all h heads.
             mask = mask.unsqueeze(1)
         nbatches = query.size(0)
 
-        # 1) Do all the linear projections in batch from d_model => h x d_k
+        # Linear projections in batch from d_model => h x d_k
         query, key, value = [
             lin(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
-            for lin, x in zip(self.linears, (query, key, value))
+            for lin, x in zip(self.linear_layers, (query, key, value))
         ]
 
-        # 2) Apply attention on all the projected vectors in batch.
-        x, self.attn = attention(
+        # Apply attention on all the projected vectors in batch
+        x, self.attention = attention(
             query, key, value, mask=mask, dropout=self.dropout
         )
 
-        # 3) "Concat" using a view and apply a final linear.
+        # Concatenate batch and apply a final linear
         x = (
             x.transpose(1, 2)
             .contiguous()
@@ -205,51 +241,60 @@ class MultiHeadedAttention(nn.Module):
         del query
         del key
         del value
-        return self.linears[-1](x)
+        return self.linear_layers[-1](x)
 
-"""## Encoder Sublayer 2: Positionwise FNN"""
+"""### Encoder Sublayer 2: Positionwise FNN"""
 
 class PositionwiseFeedForward(nn.Module):
     "Feed-forward network inside encoder layer"
     def __init__(self, d_model, d_ff, dropout=0.1):
         super(PositionwiseFeedForward, self).__init__()
-        self.w_1 = nn.Linear(d_model, d_ff)
-        self.w_2 = nn.Linear(d_ff, d_model)
+        self.linear1 = nn.Linear(d_model, d_ff)
+        self.linear2 = nn.Linear(d_ff, d_model)
+        self.activation = nn.ReLU()
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        return self.w_2(self.dropout(self.w_1(x).relu()))
+        x = self.dropout(self.activation(self.linear1(x)))
+        return self.linear2(x)
 
 """## Classifier Head"""
 
 class ClassifierHead(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim):
+    "Classify between human or AI-generated text"
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout=0.1):
         super().__init__()
         self.linear1 = nn.Linear(input_dim, hidden_dim)
-        self.dropout = nn.Dropout(0.1)
         self.linear2 = nn.Linear(hidden_dim, output_dim)
-        self.activation = nn.GELU()
+        self.activation = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         x = self.dropout(self.activation(self.linear1(x)))
-        x = self.linear2(x)
+        x = self.sigmoid(self.linear2(x))
         return x
 
 """## Model Creation"""
 
-def make_model(
-    vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1
-):
-    "Construct AITextDetectionModel model from hyperparameters."
+def construct_model(vocab_size, N=6, d_model=512, d_ff=2048, h=8, num_classes=2, dropout=0.1):
     c = copy.deepcopy
+
+    position_encoder = PositionalEncoding(d_model, dropout)
+    source_embedding = nn.Sequential(Embeddings(d_model, vocab_size), c(position_encoder))
+
     attention_head = MultiHeadedAttention(h, d_model)
     feed_forward_network = PositionwiseFeedForward(d_model, d_ff, dropout)
-    position_encoder = PositionalEncoding(d_model, dropout)
+
+    encoder_layer = EncoderLayer(d_model, c(attention_head), c(feed_forward_network), dropout)
+    encoder_stack = EncoderStack(encoder_layer, N)
+
+    classifier_head = ClassifierHead(input_dim=d_model, hidden_dim=d_model // 2, output_dim=num_classes, dropout=dropout)
 
     model = AITextDetectionModel(
-        nn.Sequential(Embeddings(d_model, vocab), c(position_encoder)),
-        EncoderStack(EncoderLayer(d_model, c(attention_head), c(feed_forward_network), dropout), N),
-        ClassifierHead()
+        source_embedding,
+        encoder_stack,
+        classifier_head
     )
 
     # Initialize parameters with Glorot / fan_avg
@@ -259,32 +304,30 @@ def make_model(
     return model
 
 def inference_test():
-    test_model = make_model(11, 11, 2)
-    test_model.eval()
+    vocab_size = 1000
+    model = construct_model(vocab_size, N=2, d_model=128, d_ff=512, h=4, num_classes=2, dropout=0.1)
+    model.eval()
     src = torch.LongTensor([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
     src_mask = torch.ones(1, 1, 10)
 
-    memory = test_model.encode(src, src_mask)
-    ys = torch.zeros(1, 1).type_as(src)
+    batch_size = 1
+    seq_len = 10
+    source = torch.randint(0, vocab_size, (batch_size, seq_len))
+    source_mask = torch.ones(batch_size, 1, seq_len)
 
-    for i in range(9):
-        out = test_model.decode(
-            memory, src_mask, ys, subsequent_mask(ys.size(1)).type_as(src.data)
-        )
-        prob = test_model.generator(out[:, -1])
-        _, next_word = torch.max(prob, dim=1)
-        next_word = next_word.data[0]
-        ys = torch.cat(
-            [ys, torch.empty(1, 1).type_as(src.data).fill_(next_word)], dim=1
-        )
+    with torch.no_grad():
+        logits = model(src, src_mask)
+        probs = F.softmax(logits, dim=-1)
+        predicted_class = torch.argmax(probs, dim=-1)
 
-    print("Example Untrained Model Prediction:", ys)
+    print(f"Input shape: {src.shape}")
+    print(f"Mask shape: {src_mask.shape}")
+    print(f"Probabilities [Human, AI]: {probs}")
+    print(f"Predicted class: {predicted_class.item()} (0 = Human-written, 1 = AI-generated)")
 
 
-def run_tests():
-    for _ in range(10):
+def run_tests(n_tests=10):
+    for _ in range(n_tests):
         inference_test()
 
-
-show_example(run_tests)
-
+run_tests(10)
