@@ -1,5 +1,8 @@
 import argparse
+import random
+
 import torch
+import pandas as pd
 
 from models import make_model
 from tokenizer import make_tokenizer
@@ -49,18 +52,32 @@ def main(checkpoint_path):
     model, tokenizer, max_len = load_model(checkpoint_path, device)
     print("Model loaded. Enter text to classify (q to quit):\n")
 
+    df = pd.read_csv("data/Training_Essay_Data.csv")
+    texts = df["text"].tolist()
+
     while True:
+        
         text = input(">>> ")
         if text.lower() == "q":
             print("Exiting.")
             break
+        
+        random_text = False
+        i = random.randint(0, len(texts)-1)
+        if text.lower() == "dataset":
+            text = texts[i]
+            random_text = True
 
         if not text.strip():
             continue
-
+        
+        if random_text:
+            print(f"Randomly Selected Text: {text[:100]}")
+            actual_label = "AI-generated" if df.iloc[i, 1] == 1 else "Human-written"
+            print(f"Actual: {actual_label}")
         pred, confidence = predict(model, tokenizer, text, max_len, device)
-        label = "AI-generated" if pred == 1 else "Human-written"
-        print(f"Prediction: {label} (confidence: {confidence:.2%})\n")
+        pred_label = "AI-generated" if pred == 1 else "Human-written"
+        print(f"Prediction: {pred_label} (confidence: {confidence:.2%})\n")
 
 
 if __name__ == "__main__":
