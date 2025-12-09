@@ -120,6 +120,10 @@ if __name__ == '__main__':
 
             if (batch_idx + 1) % 100 == 0 or (batch_idx + 1) in (1, 2, 3, 4, 5):
                 print(f"Epoch {epoch+1} | Batch {batch_idx+1}/{len(train_loader)} | Loss: {loss.item():.4f}")
+            
+            if (batch_idx + 1) % 5000 == 0:
+                checkpoint_path = os.path.join(checkpoint_dir, f"pretrained_encoder_epoch_{epoch+1}_batch_{batch_idx + 1}.pt")
+                torch.save(encoder.state_dict(), checkpoint_path)
 
         avg_loss = total_loss / len(train_loader)
         print(f"Epoch {epoch+1}/{num_epochs} | Avg Loss: {avg_loss:.4f}")
