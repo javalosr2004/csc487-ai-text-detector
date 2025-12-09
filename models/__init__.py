@@ -7,6 +7,8 @@ from .transformer import (
     MultiHeadedAttention,
     PositionwiseFeedForward,
     ClassifierHead,
-    make_model
+    Encoder,
+    make_classifier,
+    make_encoder
 )
 
