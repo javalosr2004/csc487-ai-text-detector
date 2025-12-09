@@ -51,21 +51,21 @@ class MLMDataset(Dataset):
         }
 
 
-def load_bookcorpus(split="train", max_samples=None):
+def load_bookcorpus(split, max_samples):
     """Load BookCorpus dataset from Hugging Face."""
     print("Loading BookCorpus dataset...")
+    full_dataset = None
     try:
-        dataset = load_dataset("bookcorpus", split=split)
+        full_dataset = load_dataset("bookcorpus", split=split)
     except Exception as e:
         print(f"Error loading bookcorpus: {e}")
         print("Trying alternative dataset...")
         # Alternative: use a smaller subset or different dataset
-        dataset = load_dataset("wikitext", "wikitext-2-raw-v1", split="train")
+        full_dataset = load_dataset("wikitext", "wikitext-2-raw-v1", split=split)
     
-    if max_samples:
-        dataset = dataset.select(range(min(max_samples, len(dataset))))
+    subset_dataset = full_dataset.select(range(min(max_samples, len(full_dataset))))
     
-    texts = [item["text"] for item in dataset if item.get("text") and len(item["text"]) > 50]
+    texts = [item["text"] for item in subset_dataset if item.get("text") and len(item["text"]) > 50]
     print(f"Loaded {len(texts)} texts from BookCorpus")
     
     return texts

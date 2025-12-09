@@ -44,7 +44,7 @@ if __name__ == '__main__':
     cfg = load_config(args.config)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    book_corpus = load_bookcorpus("train", max_samples=22_000_000)
+    book_corpus = load_bookcorpus(split="train", max_samples=10_000_000)
     
     tokenizer = make_tokenizer(cfg)
     tokenizer.build_vocab(book_corpus)
@@ -118,7 +118,7 @@ if __name__ == '__main__':
 
             total_loss += loss.item()
 
-            if (batch_idx + 1) % 100 == 0:
+            if batch_idx % 100 == 0 or batch_idx in (0, 1, 2, 3, 4, 5):
                 print(f"Epoch {epoch+1} | Batch {batch_idx+1}/{len(train_loader)} | Loss: {loss.item():.4f}")
 
         avg_loss = total_loss / len(train_loader)
