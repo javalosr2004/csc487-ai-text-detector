@@ -8,12 +8,7 @@ from torch.utils.data import DataLoader
 from dataloaders.mlm import MLMDataset, load_bookcorpus
 from models import make_encoder
 from tokenizer import make_tokenizer
-
-
-def load_config(config_path):
-    with open(config_path, "r") as f:
-        return yaml.safe_load(f)
-
+from helper import load_config
 
 def create_mask(input_ids, pad_token_id):
     mask = (input_ids != pad_token_id).unsqueeze(1)
@@ -39,6 +34,7 @@ class MLMHead(nn.Module):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, required=True, help="Path to config YAML file")
+    parser.add_argument("--epochs", type=str, required=False, help="Number of epochs to train")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -82,7 +78,7 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss(ignore_index=-100)
 
     # Training loop
-    num_epochs = cfg["training"]["epochs"]
+    num_epochs = int(args.epochs) if args.epochs is not None else cfg["training"]["epochs"]
     checkpoint_dir = cfg.get("paths", {}).get("checkpoint_dir", "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -118,7 +114,7 @@ if __name__ == '__main__':
 
             total_loss += loss.item()
 
-            if batch_idx % 100 == 0 or batch_idx in (0, 1, 2, 3, 4, 5):
+            if (batch_idx + 1) % 100 == 0 or (batch_idx + 1) in (1, 2, 3, 4, 5):
                 print(f"Epoch {epoch+1} | Batch {batch_idx+1}/{len(train_loader)} | Loss: {loss.item():.4f}")
 
         avg_loss = total_loss / len(train_loader)
