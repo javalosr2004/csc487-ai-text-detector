@@ -1,0 +1,15 @@
+model:
+  d_model: 512
+  d_ff: 2048
+  h: 8
+  N: 4
+  dropout: 0.1
+
+# Training settings
+training:
+  batch_size: 1024
+  epochs: 5
+  learning_rate: 0.0005
+  max_seq_len: 128
+  seed: 42
+  tokenizer: "bert"

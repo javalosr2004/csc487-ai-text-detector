@@ -12,7 +12,7 @@ from pathlib import Path
 from torch.utils.data import Dataset, DataLoader
 from sklearn.model_selection import train_test_split
 
-from models import make_model
+from models import make_classifier, make_encoder
 from tokenizer import CharTokenizer, make_tokenizer
 from preprocessing import preprocess_text, filter_short_texts
 
@@ -75,7 +75,7 @@ def plot_curves(history, save_path):
     print(f"Saved training curves to {save_path}")
 
 
-def train(config_path):
+def train(config_path, checkpoint_path=None):
     print("Training")
     cfg = load_config(config_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -114,13 +114,28 @@ def train(config_path):
     train_loader = DataLoader(train_dataset, batch_size=cfg["training"]["batch_size"], shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=cfg["training"]["batch_size"])
 
-    model = make_model(
+    pretrained_encoder = None
+    if checkpoint_path:
+        print(f"Loading pretrained encoder from {checkpoint_path}")
+        pretrained_encoder = make_encoder(
+            vocab=tokenizer.vocab_size,
+            N=cfg["model"]["N"],
+            d_model=cfg["model"]["d_model"],
+            d_ff=cfg["model"]["d_ff"],
+            h=cfg["model"]["h"],
+            dropout=cfg["model"]["dropout"]
+        )
+        pretrained_encoder.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        pretrained_encoder = pretrained_encoder.to(device)
+
+    model = make_classifier(
         vocab=tokenizer.vocab_size,
         N=cfg["model"]["N"],
         d_model=cfg["model"]["d_model"],
         d_ff=cfg["model"]["d_ff"],
         h=cfg["model"]["h"],
-        dropout=cfg["model"]["dropout"]
+        dropout=cfg["model"]["dropout"],
+        pretrained_encoder=pretrained_encoder
     )
     model = model.to(device)
 
@@ -222,5 +237,6 @@ def train(config_path):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, required=True, help="Path to config YAML file")
+    parser.add_argument("--checkpoint", type=str, help="Path to pretrained encoder checkpoint")
     args = parser.parse_args()
-    train(args.config)
+    train(args.config, args.checkpoint)

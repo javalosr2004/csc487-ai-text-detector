@@ -20,15 +20,14 @@ def attention(query, key, value, mask=None, dropout=None):
 
 
 class AITextDetectionModel(nn.Module):
-    def __init__(self, source_embedding, encoder_stack, classifier_head):
+    def __init__(self, encoder, classifier_head):
         super(AITextDetectionModel, self).__init__()
-        self.source_embedding = source_embedding
-        self.encoder_stack = encoder_stack
+        self.encoder = encoder
         self.classifier_head = classifier_head
 
     def forward(self, source, source_mask):
-        encoded_output = self.encoder_stack(self.source_embedding(source), source_mask)
-        output_embedding = encoded_output[:, 0, :]
+        encoded_output = self.encoder(source, source_mask)
+        output_embedding = encoded_output[:, 0, :]  # [CLS] token
         logits = self.classifier_head(output_embedding)
         return logits
 
@@ -176,20 +175,66 @@ class ClassifierHead(nn.Module):
         return x
 
 
-def make_model(vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1):
+class Encoder(nn.Module):
+    """Encoder-only model for pretraining (no classification head)."""
+    def __init__(self, embedding, encoder_stack):
+        super().__init__()
+        self.embedding = embedding
+        self.encoder_stack = encoder_stack
+
+    def forward(self, x, mask):
+        return self.encoder_stack(self.embedding(x), mask)
+
+
+def make_encoder(vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1):
+    """Creates encoder-only model for pretraining."""
     c = copy.deepcopy
     attention_head = MultiHeadedAttention(h, d_model)
     feed_forward_network = PositionwiseFeedForward(d_model, d_ff, dropout)
     position_encoder = PositionalEncoding(d_model, dropout)
 
-    model = AITextDetectionModel(
+    model = Encoder(
         nn.Sequential(Embeddings(d_model, vocab), c(position_encoder)),
         EncoderStack(EncoderLayer(d_model, c(attention_head), c(feed_forward_network), dropout), N),
-        ClassifierHead(d_model, d_model // 2)
     )
 
     for p in model.parameters():
         if p.dim() > 1:
             nn.init.xavier_uniform_(p)
+    return model
+
+
+def make_classifier(vocab, N=6, d_model=512, d_ff=2048, h=8, dropout=0.1, pretrained_encoder=None):
+    """
+    Creates classification model for AI text detection (fine-tuning).
+    
+    Args:
+        vocab: Vocabulary size.
+        N: Number of encoder layers.
+        d_model: Model dimension.
+        d_ff: Feed-forward dimension.
+        h: Number of attention heads.
+        dropout: Dropout rate.
+        pretrained_encoder: Optional pretrained Encoder to use (for fine-tuning).
+    """
+    if pretrained_encoder is not None:
+        encoder = pretrained_encoder
+    else:
+        encoder = make_encoder(vocab, N, d_model, d_ff, h, dropout)
+
+    classifier_head = ClassifierHead(d_model, d_model // 2)
+    
+    model = AITextDetectionModel(encoder, classifier_head)
+
+    # Only init classifier head if using pretrained encoder
+    if pretrained_encoder is not None:
+        for p in classifier_head.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
+    else:
+        for p in model.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
+    
     return model
 

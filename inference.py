@@ -4,7 +4,7 @@ import random
 import torch
 import pandas as pd
 
-from models import make_model
+from models import make_classifier
 from tokenizer import make_tokenizer
 from train import create_mask
 
@@ -16,7 +16,7 @@ def load_model(checkpoint_path, device):
     tokenizer = make_tokenizer(cfg)
     tokenizer.load(cfg["paths"]["vocab"])
 
-    model = make_model(
+    model = make_classifier(
         vocab=checkpoint["vocab_size"],
         N=cfg["model"]["N"],
         d_model=cfg["model"]["d_model"],

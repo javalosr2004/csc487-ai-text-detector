@@ -8,7 +8,7 @@ class CharTokenizer:
     def __init__(self):
         self.char_to_idx = {}
         self.idx_to_char = {}
-        self.special_tokens = ["[PAD]", "[UNK]", "[CLS]"]
+        self.special_tokens = ["[PAD]", "[UNK]", "[CLS]", "[MASK]"]
 
     def build_vocab(self, texts):
         chars = set()
@@ -49,6 +49,10 @@ class CharTokenizer:
     def pad_token_id(self):
         return self.char_to_idx["[PAD]"]
 
+    @property
+    def mask_token_id(self):
+        return self.char_to_idx["[MASK]"]
+
     def save(self, path):
         with open(path, "w") as f:
             json.dump(self.char_to_idx, f)
@@ -86,6 +90,10 @@ class BertTokenizerWrapper:
     @property
     def pad_token_id(self):
         return self.tokenizer.pad_token_id
+
+    @property
+    def mask_token_id(self):
+        return self.tokenizer.mask_token_id
 
     def save(self, path):
         pass
