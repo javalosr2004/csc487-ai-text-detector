@@ -7,7 +7,7 @@ model:
 
 # Training settings
 training:
-  batch_size: 1024
+  batch_size: 64
   epochs: 5
   learning_rate: 0.0005
   max_seq_len: 128
