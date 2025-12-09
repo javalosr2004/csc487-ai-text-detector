@@ -35,9 +35,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, required=True, help="Path to config YAML file")
     parser.add_argument("--epochs", type=str, required=False, help="Number of epochs to train")
+    parser.add_argument("--checkpoint", type=str, required=False, help="Path to intermediate model checkpoint")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
+    checkpoint_path = args.checkpoint
+    num_epochs = int(args.epochs) if args.epochs is not None else cfg["training"]["epochs"]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     book_corpus = load_bookcorpus(split="train", max_samples=10_000_000)
@@ -67,6 +70,8 @@ if __name__ == '__main__':
         h=cfg["model"]["h"],
         dropout=cfg["model"]["dropout"]
     )
+    if checkpoint_path:
+        encoder.load_state_dict(torch.load(checkpoint_path, map_location=device))
     encoder = encoder.to(device)
 
     mlm_head = MLMHead(cfg["model"]["d_model"], tokenizer.vocab_size).to(device)
@@ -78,7 +83,6 @@ if __name__ == '__main__':
     criterion = nn.CrossEntropyLoss(ignore_index=-100)
 
     # Training loop
-    num_epochs = int(args.epochs) if args.epochs is not None else cfg["training"]["epochs"]
     checkpoint_dir = cfg.get("paths", {}).get("checkpoint_dir", "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
 
