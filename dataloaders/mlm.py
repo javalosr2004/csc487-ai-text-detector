@@ -3,7 +3,8 @@ This module serves for the masked language modeling training step.
 '''
 
 import torch
-from datasets import load_dataset, Dataset
+from datasets import load_dataset
+from torch.utils.data import Dataset
 import random
 
 class MLMDataset(Dataset):
