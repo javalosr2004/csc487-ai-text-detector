@@ -73,7 +73,7 @@ if __name__ == '__main__':
         dropout=cfg["model"]["dropout"]
     )
     if checkpoint_path:
-        encoder.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        encoder.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=False))
     encoder = encoder.to(device)
 
     mlm_head = MLMHead(cfg["model"]["d_model"], tokenizer.vocab_size).to(device)
