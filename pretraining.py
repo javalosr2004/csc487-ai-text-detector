@@ -35,15 +35,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, required=True, help="Path to config YAML file")
     parser.add_argument("--epochs", type=str, required=False, help="Number of epochs to train")
+    parser.add_argument("--max_samples", type=str, required=False, help="Number of training samples")
     parser.add_argument("--checkpoint", type=str, required=False, help="Path to intermediate model checkpoint")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
     checkpoint_path = args.checkpoint
     num_epochs = int(args.epochs) if args.epochs is not None else cfg["training"]["epochs"]
+    max_samples = int(args.max_samples) if args.max_samples is not None else 10_000_000
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    book_corpus = load_bookcorpus(split="train", max_samples=10_000_000)
+    
+    book_corpus = load_bookcorpus(split="train", max_samples=max_samples)
     
     tokenizer = make_tokenizer(cfg)
     tokenizer.build_vocab(book_corpus)
