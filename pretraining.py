@@ -1,4 +1,3 @@
-from google.colab import drive
 import argparse
 import time
 import yaml
@@ -34,7 +33,6 @@ class MLMHead(nn.Module):
 
 
 if __name__ == '__main__':
-    drive.mount('/content/drive')
     drive_checkpoint_dir = "/content/drive/MyDrive/pretrain_checkpoints"
     os.makedirs(drive_checkpoint_dir, exist_ok=True)
 
