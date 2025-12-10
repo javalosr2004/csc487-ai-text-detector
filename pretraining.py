@@ -1,3 +1,4 @@
+from google.colab import drive
 import argparse
 import time
 import yaml
@@ -33,6 +34,10 @@ class MLMHead(nn.Module):
 
 
 if __name__ == '__main__':
+    drive.mount('/content/drive')
+    drive_checkpoint_dir = "/content/drive/MyDrive/pretrain_checkpoints"
+    os.makedirs(drive_checkpoint_dir, exist_ok=True)
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, required=True, help="Path to config YAML file")
     parser.add_argument("--epochs", type=str, required=False, help="Number of epochs to train")
@@ -128,9 +133,13 @@ if __name__ == '__main__':
                 print(f"Epoch {epoch+1} | Batch {batch_idx+1}/{len(train_loader)} | Loss: {loss.item():.4f} | ", end='')
                 print(f"Time Elapsed: {elapsed_time/3600:.2f} hrs ({elapsed_time/60:.2f} mins)")
             
-            if (batch_idx + 1) % 5000 == 0:
+            if (batch_idx + 1) % 10000 == 0:
                 checkpoint_path = os.path.join(checkpoint_dir, f"pretrained_encoder_epoch_{epoch+1}_batch_{batch_idx + 1}.pt")
                 torch.save(encoder.state_dict(), checkpoint_path)
+            
+            if (batch_idx + 1) % 10000 == 0:
+                drive_path = os.path.join(drive_checkpoint_dir, f"pretrained_encoder_epoch_{epoch+1}_batch_{batch_idx + 1}.pt")
+                torch.save(encoder.state_dict(), drive_path)
 
         avg_loss = total_loss / len(train_loader)
         print(f"Epoch {epoch+1}/{num_epochs} | Avg Loss: {avg_loss:.4f}")
@@ -139,3 +148,7 @@ if __name__ == '__main__':
         checkpoint_path = os.path.join(checkpoint_dir, f"pretrained_encoder_epoch_{epoch+1}.pt")
         torch.save(encoder.state_dict(), checkpoint_path)
         print(f"Saved encoder checkpoint to {checkpoint_path}")
+
+        drive_path = os.path.join(drive_checkpoint_dir, f"pretrained_encoder_epoch_{epoch+1}.pt")
+        torch.save(encoder.state_dict(), drive_path)
+        print(f"Saved encoder checkpoint to {drive_path}")
