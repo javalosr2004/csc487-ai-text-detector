@@ -124,8 +124,8 @@ if __name__ == '__main__':
             total_loss += loss.item()
 
             if (batch_idx + 1) % 500 == 0:
-                print(f"Epoch {epoch+1} | Batch {batch_idx+1}/{len(train_loader)} | Loss: {loss.item():.4f}" )
                 elapsed_time = time.time() - start_time
+                print(f"Epoch {epoch+1} | Batch {batch_idx+1}/{len(train_loader)} | Loss: {loss.item():.4f} | ", end='')
                 print(f"Time Elapsed: {elapsed_time/3600:.2f} hrs ({elapsed_time/60:.2f} mins)")
             
             if (batch_idx + 1) % 5000 == 0:
