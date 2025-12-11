@@ -1,0 +1,21 @@
+model:
+  d_model: 512
+  d_ff: 2048
+  h: 8
+  N: 4
+  dropout: 0.1
+
+# Training settings
+training:
+  batch_size: 16
+  epochs: 10
+  learning_rate: 0.00002
+  max_seq_len: 512
+  seed: 42
+  tokenizer: "bert"
+
+# Paths
+paths:
+  data: "data/Training_Essay_Data.csv"
+  checkpoint_dir: "checkpoints"
+  vocab: "vocab.json"
