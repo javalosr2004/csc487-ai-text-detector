@@ -19,65 +19,60 @@ The training data should be a CSV file named `Training_Essay_Data.csv` with the 
 | `text` | The essay text content |
 | `generated` | Label: 0 = human-written, 1 = AI-generated |
 
-## Training
+## Pretraining 
 
-Train the baseline model:
+Pretrain the encoder on BookCorpus using Masked Language Modeling (MLM):
 
 ```bash
-python train.py --config configs/baseline.yaml
+python pretraining.py --config configs/pretrain.yaml
 ```
 
-Train the improved model:
+Options:
+- `--epochs N` — override number of epochs
+- `--max_samples N` — limit dataset size (default: 10M)
+- `--checkpoint path/to/checkpoint.pt` — resume from checkpoint
+
+**Features:**
+- Deterministic 98/2 train/val split of BookCorpus (configurable via `val_ratio`)
+- Validation loss computed every epoch
+- Checkpoints saved per epoch and every 10k batches
+
+## Fine Tuning
+
+Train with a pretrained encoder:
 
 ```bash
-python train.py --config configs/bert.yaml
+python train.py --config configs/train.yaml --checkpoint checkpoints/encoder.pt
 ```
 
 This will:
 - Load data from `Training_Essay_Data.csv`
 - Set random seed to 42 for reproducibility
-- Train for 10 epochs
+- Train for 10 epochs with validation every epoch
 - Save checkpoints to `checkpoints/`
 - Generate training curves (`checkpoints/training_curves.png`)
-- Save final model checkpoint (`checkpoints/baseline.pt` or `checkpoints/bert.pt`)
+- Save final model checkpoint (`checkpoints/train.pt`)
 
 ## Evaluation
 
-Evaluate the baseline model:
-
 ```bash
-python eval.py --checkpoint checkpoints/baseline.pt
-```
-
-Evaluate the improved model:
-
-```bash
-python eval.py --checkpoint checkpoints/bert.pt
-```
-
-## Inference
-
-Test the baseline model:
-
-```bash
-python inference.py --checkpoint checkpoints/baseline.pt
-```
-
-Test the improved model:
-
-```bash
-python inference.py --checkpoint checkpoints/bert.pt
+python eval.py --checkpoint checkpoints/train.pt
 ```
 
 This will:
 - Load the trained model
 - Compute accuracy, precision, recall, F1 score
-- Compare against random baseline
 - Generate confusion matrix (`checkpoints/confusion_matrix.png`)
+
+## Inference
+
+```bash
+python inference.py --checkpoint checkpoints/train.pt
+```
 
 ## Configuration
 
-Edit `configs/baseline.yaml` or `configs/bert.yaml` to adjust:
+Edit `configs/pretrain.yaml` or `configs/train.yaml` to adjust:
 
 **Model:**
 - `d_model`: Hidden dimension (default: 512)
@@ -92,6 +87,7 @@ Edit `configs/baseline.yaml` or `configs/bert.yaml` to adjust:
 - `learning_rate`: Learning rate (default: 0.0001)
 - `max_seq_len`: Maximum sequence length (default: 512)
 - `seed`: Random seed (default: 42)
+- `val_ratio`: Validation split ratio for pretraining (default: 0.02 = 98/2 split)
 
 ## Project Structure
 
@@ -99,16 +95,19 @@ Edit `configs/baseline.yaml` or `configs/bert.yaml` to adjust:
 csc487-ai-text-detector/
 ├── models/
 │   ├── __init__.py
-│   └── transformer.py    # Model architecture
+│   └── transformer.py      # Model architecture
+├── dataloaders/
+│   └── mlm.py              # MLM dataset & BookCorpus loader
 ├── configs/
-│   └── baseline.yaml     # Hyperparameters
-│   └── bert.yaml         # Hyperparameters
-├── tokenizer.py          # Character-level tokenizer
-├── preprocessing.py      # Preprocessing script
-├── train.py              # Training script
-├── eval.py               # Evaluation script
-├── inference.py          # Inference script
-├── requirements.txt      # Dependencies
+│   ├── pretrain.yaml       # Pretraining config
+│   └── train.yaml          # Fine-tuning config
+├── tokenizer.py            # Character-level tokenizer
+├── preprocessing.py        # Preprocessing script
+├── pretraining.py          # MLM pretraining script
+├── train.py                # Fine-tuning script
+├── eval.py                 # Evaluation script
+├── inference.py            # Inference script
+├── requirements.txt        # Dependencies
 └── README.md
 ```
 
@@ -116,18 +115,9 @@ csc487-ai-text-detector/
 
 To reproduce reported metrics:
 
-For baseline model:
-
 ```bash
 pip install -r requirements.txt
-python train.py --config configs/baseline.yaml
-python eval.py --checkpoint checkpoints/baseline.pt
-```
-
-For improved model:
-
-```bash
-pip install -r requirements.txt
-python train.py --config configs/bert.yaml
-python eval.py --checkpoint checkpoints/bert.pt
+python pretraining.py --config configs/pretrain.yaml
+python train.py --config configs/train.yaml --checkpoint checkpoints/pretrained_encoder_epoch_5.pt
+python eval.py --checkpoint checkpoints/train.pt
 ```

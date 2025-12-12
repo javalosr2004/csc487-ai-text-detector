@@ -13,3 +13,4 @@ training:
   max_seq_len: 128
   seed: 42
   tokenizer: "bert"
+  val_ratio: 0.02

@@ -6,7 +6,7 @@ import torch.nn as nn
 import os
 from torch.utils.data import DataLoader
 
-from dataloaders.mlm import MLMDataset, load_bookcorpus
+from dataloaders.mlm import MLMDataset, load_bookcorpus_train_val
 from models import make_encoder
 from tokenizer import make_tokenizer
 from helper import load_config
@@ -49,13 +49,26 @@ if __name__ == '__main__':
     max_samples = int(args.max_samples) if args.max_samples is not None else 10_000_000
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    book_corpus = load_bookcorpus(split="train", max_samples=max_samples)
+    val_ratio = cfg.get("training", {}).get("val_ratio", 0.02)
+    train_texts, val_texts = load_bookcorpus_train_val(
+        max_samples=max_samples,
+        val_ratio=val_ratio,
+        seed=cfg["training"]["seed"],
+    )
     
     tokenizer = make_tokenizer(cfg)
-    tokenizer.build_vocab(book_corpus)
+    tokenizer.build_vocab(train_texts)
     
-    mlm_dataset = MLMDataset(
-        book_corpus,
+    train_dataset = MLMDataset(
+        train_texts,
+        tokenizer=tokenizer,
+        max_len=cfg["training"]["max_seq_len"],
+        mask_prob=0.15,
+        mask_token_id=tokenizer.mask_token_id
+    )
+
+    val_dataset = MLMDataset(
+        val_texts,
         tokenizer=tokenizer,
         max_len=cfg["training"]["max_seq_len"],
         mask_prob=0.15,
@@ -63,9 +76,14 @@ if __name__ == '__main__':
     )
     
     train_loader = DataLoader(
-        mlm_dataset,
+        train_dataset,
         batch_size=cfg["training"]["batch_size"],
         shuffle=True
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=cfg["training"]["batch_size"],
+        shuffle=False
     )
 
     encoder = make_encoder(
@@ -140,7 +158,32 @@ if __name__ == '__main__':
                 torch.save(encoder.state_dict(), drive_path)
 
         avg_loss = total_loss / len(train_loader)
-        print(f"Epoch {epoch+1}/{num_epochs} | Avg Loss: {avg_loss:.4f}")
+
+        # Validation loop (every epoch)
+        encoder.eval()
+        mlm_head.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for batch in val_loader:
+                input_ids = batch["input_ids"].to(device)
+                labels = batch["labels"].to(device)
+                mask_positions = batch["mask_positions"].to(device)
+
+                mlm_labels = labels.clone()
+                mlm_labels[~mask_positions] = -100
+
+                mask = create_mask(input_ids, tokenizer.pad_token_id).to(device)
+                encoder_output = encoder(input_ids, mask)
+                logits = mlm_head(encoder_output)
+                loss = criterion(logits.view(-1, tokenizer.vocab_size), mlm_labels.view(-1))
+                val_loss += loss.item()
+
+        avg_val_loss = val_loss / max(1, len(val_loader))
+        print(
+            f"Epoch {epoch+1}/{num_epochs} | "
+            f"Train Loss: {avg_loss:.4f} | "
+            f"Val Loss: {avg_val_loss:.4f}"
+        )
 
         # Save encoder checkpoint
         checkpoint_path = os.path.join(checkpoint_dir, f"pretrained_encoder_epoch_{epoch+1}.pt")

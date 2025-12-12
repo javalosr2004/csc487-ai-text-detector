@@ -69,3 +69,30 @@ def load_bookcorpus(split, max_samples):
     print(f"Loaded {len(texts)} texts from BookCorpus")
     
     return texts
+
+
+def load_bookcorpus_train_val(max_samples, val_ratio=0.02, seed=42, min_length=50):
+    """
+    Load BookCorpus (or fallback dataset) and deterministically split into train/val.
+    """
+
+    if not (0.0 < val_ratio < 1.0):
+        raise ValueError(f"val_ratio must be in (0, 1); got {val_ratio}")
+
+    texts = load_bookcorpus(split="train", max_samples=max_samples)
+    texts = [t for t in texts if t and len(t) > min_length]
+
+    if len(texts) < 2:
+        raise ValueError("Not enough samples to create a train/val split.")
+
+    rng = random.Random(seed)
+    indices = range(len(texts))
+    rng.shuffle(indices)
+
+    val_size = max(1, int(round(len(indices) * val_ratio)))
+    val_idx = (indices[:val_size])
+
+    train_texts = [t for i, t in enumerate(texts) if i not in val_idx]
+    val_texts = [t for i, t in enumerate(texts) if i in val_idx]
+
+    return train_texts, val_texts
