@@ -2,6 +2,10 @@
 
 A transformer encoder-based model for detecting AI-generated text.
 
+## Links
+[Report](https://docs.google.com/document/d/18y4A9QOwEmzTmTjn5hBX1L_MxLmvqmAFrSzdwlWYa-w/edit?usp=sharing)
+[Slide Deck](https://docs.google.com/presentation/d/1US21cNRwa3dSRY6sAg_PVFw2Up51zOSvVnrAAg7Lbl4/edit?usp=sharing)
+
 ## Setup
 
 Install dependencies:
