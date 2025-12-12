@@ -120,4 +120,5 @@ pip install -r requirements.txt
 python pretraining.py --config configs/pretrain.yaml
 python train.py --config configs/train.yaml --checkpoint checkpoints/pretrained_encoder_epoch_5.pt
 python eval.py --checkpoint checkpoints/train.pt
+python inference.py --checkpoint checkpoints/train.pt
 ```
